@@ -1,0 +1,6 @@
+{
+  "name": "GROOT",
+  "tagline": "Java Data Visualization project",
+  "body": "# groot\r\nJava Data Visualization project designed to make histogramming, plotting, and fitting accessible for Java users. \r\n##Features\r\n- Histograms 1D/2D\r\n- Functions \r\n- GraphErrors \r\n- Fitting routines using Minuit\r\n- GUI tools for easily editing plot attributes and for fitting\r\n\r\n# Examples\r\nTry out the [demo jar](https://github.com/gavalian/groot/raw/master/jars/GrootDemo.jar) and check out the examples on our [Wiki](https://github.com/gavalian/groot/wiki \"GROOT Wiki\"). \r\nTo run the example: Simply double click on the jar if you're a mac user, or if you're a linux user run ```java -jar GrootDemo.jar```\r\n\r\n#Installation\r\nSimply add this [library jar](https://github.com/gavalian/groot/raw/master/jars/GROOTLib_082516_01a2472.jar) to your build path in an IDE.\r\n\r\n#Requirements\r\nJava 1.8 or greater\r\n\r\n#Documentation\r\nCheck out our [Wiki](https://github.com/gavalian/groot/wiki \"GROOT Wiki\")!\r\n\r\n#Feature requests and contributions\r\nOne of the best ways to contribute is to give us feature requests and bug reports on the [issues page](https://github.com/gavalian/groot/issues \"GROOT Issues page\")! \r\n",
+  "note": "Don't delete this file! It's used internally to help with page regeneration."
+}
