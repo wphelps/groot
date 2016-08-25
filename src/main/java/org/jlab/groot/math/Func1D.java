@@ -39,6 +39,7 @@ public class Func1D implements IDataSet {
     }
     
     private void initAttributes(){
+    	funcAttr.setDatasetType(DatasetAttributes.FUNCTION);
         /*funcAttr.add(AttributeType.LINE_COLOR, 2);
         funcAttr.add(AttributeType.LINE_WIDTH, 2);
         funcAttr.add(AttributeType.LINE_STYLE, 1);
@@ -209,10 +210,24 @@ public class Func1D implements IDataSet {
     @Override
     public PaveText getStatBox() {
         PaveText  stat = new PaveText(2);
+        stat.addText("Name:",this.getName());
         for(UserParameter par : userPars.getParameters()){
             stat.addText(par.name(),String.format("%.3f", par.value()));
         }
+        stat.addText("#chi^2/ndf",String.format("%.3f", this.getChiSquare()/(double)this.getNDF()));
+        stat.addText("#chi^2",String.format("%.3f", this.getChiSquare()));
+        stat.addText("ndf",String.format("%.3f", (double)this.getNDF()));
         return stat;
     }
+
+	public void setOptStat(int i) {
+		this.getAttributes().setOptStat(i);
+	}
+	public int getOptStat() {
+		return this.getAttributes().getOptStat();
+	}
+	
+	public void estimateParameters(){};
+	public double[] getParameterEstimate(){return null;}
 
 }

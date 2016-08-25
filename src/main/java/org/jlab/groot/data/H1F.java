@@ -64,8 +64,8 @@ public class H1F  implements IDataSet {
     	set(bins, xMin, xMax);
     	initDataStore(bins);
         this.initAttributes();
-        setXTitle(xTitle);
-        setYTitle(yTitle);
+        setTitleX(xTitle);
+        setTitleY(yTitle);
     }
     
     /**
@@ -126,7 +126,7 @@ public class H1F  implements IDataSet {
      * @param xMin		The desired minimum x-axis value
      * @param xMax		The desired maximum x-axis value
      */
-    public H1F(String name, String title, double xMin, double xMax) {
+    public H1F(String name, String title, double xMin, double xMax)  {
     	setName(name);
     	setTitle(title);
     	set((int)(xMax - xMin), xMin, xMax);
@@ -140,6 +140,7 @@ public class H1F  implements IDataSet {
         this.hAttr.setLineStyle(1);
         this.hAttr.setFillColor(-1);
         this.hAttr.setFillStyle(0);
+        this.hAttr.setDatasetType(DatasetAttributes.HISTOGRAM);
         //this.hAttr.setMarkerSize(6);
         //this.hAttr.setMarkerStyle(1);
         //this.hAttr.setMarkerColor(2);
@@ -155,7 +156,7 @@ public class H1F  implements IDataSet {
      * Sets the x-axis title to the specified parameter
      * @param xTitle		The desired title of the x-axis
      */
-    public final void setXTitle(String xTitle) {
+    public final void setTitleX(String xTitle) {
         this.hAttr.setXTitle(xTitle);
         //this.getXaxis().setTitle(xTitle);
         //this.hAttr.addString(AttributeType.STRING_TITLE_X, xTitle);
@@ -166,7 +167,7 @@ public class H1F  implements IDataSet {
      * 
      * @param yTitle		The desired title of the y-axis
      */
-    public final void setYTitle(String yTitle) {
+    public final void setTitleY(String yTitle) {
         this.hAttr.setYTitle(yTitle);
         //this.getYaxis().setTitle(yTitle);
         //this.hAttr.addString(AttributeType.STRING_TITLE_Y, yTitle);
@@ -187,14 +188,14 @@ public class H1F  implements IDataSet {
      */
     public String getTitle(){
         //return this.histTitle;
-        return "";
+        return this.hAttr.getTitle();
     }
     /**
      * The getter for the x-axis title.
      * 
      * @return		The title of the x-axis as a string
      */
-    public String getXTitle() {
+    public String getTitleX() {
         return this.hAttr.getXTitle();
     	//return this.getXaxis().getTitle();
     }
@@ -204,7 +205,7 @@ public class H1F  implements IDataSet {
      * 
      * @return		The title of the y-axis as a string
      */
-    public String getYTitle() {
+    public String getTitleY() {
         return this.hAttr.getYTitle();
         //return this.getYaxis().getTitle();
     }
@@ -827,6 +828,7 @@ public class H1F  implements IDataSet {
     @Override
     public PaveText getStatBox() {
         PaveText stat = new PaveText(2);
+        stat.addText("Name",this.getName());
         stat.addText("Entries",Integer.toString(this.getEntries()));
         stat.addText("Mean",String.format("%.3f", this.getMean()));
         stat.addText("RMS",String.format("%.3f", this.getRMS()));
@@ -848,4 +850,8 @@ public class H1F  implements IDataSet {
         }
         return stat;
     }
+
+	public void setOptStat(int i) {
+		this.hAttr.setOptStat(i);
+	}
 }

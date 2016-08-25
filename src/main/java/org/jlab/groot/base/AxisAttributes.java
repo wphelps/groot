@@ -8,6 +8,8 @@ package org.jlab.groot.base;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentListener;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -23,6 +25,8 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 import org.jlab.groot.graphics.EmbeddedCanvas;
+import org.jlab.groot.math.Dimension1D;
+import org.jlab.groot.ui.DoubleSpinner;
 import org.jlab.groot.ui.LatexText;
 
 import net.miginfocom.swing.MigLayout;
@@ -31,7 +35,7 @@ import net.miginfocom.swing.MigLayout;
  *
  * @author gavalian
  */
-public class AxisAttributes {
+public class AxisAttributes implements Cloneable{
     
     private String  labelFontName    = "Avenir";
     private int     labelFontSize    = 12;
@@ -39,16 +43,19 @@ public class AxisAttributes {
     private int     titleFontSize    = 12;
     private boolean  axisAutoScale   = true;
     private double   axisMinimum     = 0.0;
-    private double   axisMaximum     = 1.0;
+    private double   axisMaximum     = 2.0;
     private int     labelOffset      = 4;
     private int     titleOffset      = 5;
     private boolean  axisGrid        = true;
     private int      lineColor       = 1;
     private int      lineWidth       = 1;
     private int      tickSize        = 5;
+    private boolean  log			 = false;
     private String   axisTitleString = "";
     private LatexText axisTitle      = new LatexText(axisTitleString);
-    
+    private FontProperties labelFont = new FontProperties();
+    private FontProperties titleFont = new FontProperties();
+
     private EmbeddedCanvas can      = null;
     
     public AxisAttributes(){
@@ -187,6 +194,10 @@ public class AxisAttributes {
 	public int getTickSize() {
 		return tickSize;
 	}
+	 @Override
+	public Object clone() throws CloneNotSupportedException {
+	        return super.clone();
+	    }
 
 	public void setLabelFontName(String fn){this.labelFontName = fn;}
     public void setLabelFontSize(int fs){this.labelFontSize = fs;}
@@ -215,10 +226,11 @@ public class AxisAttributes {
     public static class AxisAttributesPane extends JPanel implements ActionListener, ChangeListener {
         AxisAttributes attr = null;
         
-        JSpinner   axisMinimum = null;
-        JSpinner   axisMaximum = null;
+        DoubleSpinner   axisMinimum = null;
+        DoubleSpinner   axisMaximum = null;
         JCheckBox  axisAutoScale = null;
         JCheckBox  axisGrid      = null;
+        JCheckBox  axisLog       = null;
         JComboBox  labelFont     = null;
         JComboBox  titleFont     = null;
         
@@ -226,6 +238,12 @@ public class AxisAttributes {
         JComboBox  titleFontSize = null;
         
         JTextField axisTitle     = null;
+        private List<ActionListener> listeners = new ArrayList<ActionListener>();
+        
+        public void addAttributeListener(ActionListener al){
+            this.listeners.add(al);
+        }
+        
         
         
         public AxisAttributesPane(AxisAttributes aa){
@@ -241,6 +259,12 @@ public class AxisAttributes {
             titleFont = new JComboBox(FontProperties.getSystemFontsArray());
             labelFontSize = new JComboBox(FontProperties.getFontSizeArray());
             titleFontSize = new JComboBox(FontProperties.getFontSizeArray());
+            
+            labelFont.setSelectedItem(attr.getLabelFontName());
+            titleFont.setSelectedItem(attr.getTitleFontName());
+            labelFontSize.setSelectedIndex(returnIndex(FontProperties.getFontSizeArray(),attr.getLabelFontSize()));
+            titleFontSize.setSelectedIndex(returnIndex(FontProperties.getFontSizeArray(),attr.getTitleFontSize()));
+
             
             labelFont.addActionListener(this);
             titleFont.addActionListener(this);
@@ -272,18 +296,27 @@ public class AxisAttributes {
             axisTitle.addActionListener(this);
             
             this.add(axisTitle,"wrap, pushx, growx");
+            axisTitle.setText(attr.getAxisTitleString());
             this.add(new JSeparator(),"skip, wrap, growx");
             
-            axisMinimum   = new JSpinner();
-            axisMaximum   = new JSpinner();
+            axisMinimum   = new DoubleSpinner();
+            axisMaximum   = new DoubleSpinner();
             axisAutoScale = new JCheckBox();
             axisGrid      = new JCheckBox();
+            axisLog = new JCheckBox();
 
+            
+            axisMinimum.setValue(attr.getAxisMinimum());
+            axisMaximum.setValue(attr.getAxisMaximum());
+            axisAutoScale.setSelected(attr.isAxisAutoScale());
+            axisGrid.setSelected(attr.isAxisGrid());
+            axisLog.setSelected(attr.isLog());
+            
             axisMinimum.addChangeListener(this);
             axisMaximum.addChangeListener(this);
             axisAutoScale.addChangeListener(this);
             axisGrid.addChangeListener(this);
-
+            axisLog.addChangeListener(this);
 
             this.add(new JLabel("Axis Min:"));
             this.add(axisMinimum,"wrap, pushx, growx");
@@ -295,22 +328,21 @@ public class AxisAttributes {
             this.add(new JLabel("Grid:"),"pushx");
             this.add(axisGrid,"wrap, pushx, growx");
             
-            this.add(new JSeparator(),"skip, wrap, growx");
+            //this.add(new JLabel("Log:"),"skip, split4");
+            //this.add(axisLog);
+            
+            //this.add(new JSeparator(),"skip, wrap, growx");
             JButton buttonDefault = new JButton("Default");
             JButton buttonApply   = new JButton("Apply");
-            this.add(buttonDefault,"skip, split2, pushy");
-            this.add(buttonApply,"wrap, pushy");
-            buttonApply.addActionListener(new ActionListener(){
-    			public void actionPerformed(ActionEvent e){
-    				//System.out.println("Update the axis!");
-    				attr.updateCanvas();
-    			}
-            });
+            //this.add(buttonDefault,"skip, split2, pushy");
+            //this.add(buttonApply,"wrap, pushy");
             
         }
         
-        public void updateAttr(AxisAttributes axisAttr){
-            
+        public void updateCanvas(){
+        	for(ActionListener actionListener:listeners){
+        		actionListener.actionPerformed(new ActionEvent(this, 0, ""));
+        	}
         }
         
         @Override
@@ -323,26 +355,37 @@ public class AxisAttributes {
             }else if(e.getSource()==labelFontSize){
             	attr.setLabelFontSize(Integer.parseInt(FontProperties.getFontSizeArray()[labelFontSize.getSelectedIndex()]));
             }else if(e.getSource()==titleFontSize){
-            	attr.setLabelFontSize(Integer.parseInt(FontProperties.getFontSizeArray()[titleFontSize.getSelectedIndex()]));
+            	attr.setTitleFontSize(Integer.parseInt(FontProperties.getFontSizeArray()[titleFontSize.getSelectedIndex()]));
             }else if(e.getSource()==axisTitle){
             	attr.setAxisTitle(axisTitle.getText());
             }
-        
+            updateCanvas();
         }
         
         @Override
         public void stateChanged(ChangeEvent e) {
             //System.out.println("stateChanged:" + e.getSource().toString());
             if(e.getSource()==axisMinimum){
-            	attr.setAxisMinimum((double) axisMinimum.getValue());
+            	axisAutoScale.setSelected(false);
+            	attr.setAxisAutoScale(false);
+            	attr.setAxisMinimum((double) axisMinimum.getDouble());
             }else if(e.getSource()==axisMaximum){
-            	attr.setAxisMaximum((double) axisMaximum.getValue());
+            	axisAutoScale.setSelected(false);
+            	attr.setAxisAutoScale(false);
+            	attr.setAxisMaximum((double) axisMaximum.getDouble());
+            	//System.out.println("Axis Maximum:"+(double) axisMaximum.getDouble());
             }else if(e.getSource()==axisAutoScale){
             	attr.setAxisAutoScale(axisAutoScale.isSelected());
+            	attr.setAxisMinimum((double) axisMinimum.getDouble());
+            	attr.setAxisMaximum((double) axisMaximum.getDouble());
             }else if(e.getSource()==axisGrid){
             	attr.setAxisGrid(axisGrid.isSelected());
+            }else if(e.getSource()==axisLog){
+            	attr.setLog(axisLog.isSelected());
             }
+            updateCanvas();
         }
+
         
        
     }
@@ -356,8 +399,52 @@ public class AxisAttributes {
     }
 
 	public LatexText getTitle() {
-		axisTitle.setText(axisTitleString);;
+		axisTitle.setText(axisTitleString);
+		axisTitle.setFont(this.titleFontName);
+		axisTitle.setFontSize(this.titleFontSize);
 		return axisTitle;
+	}
+
+	public FontProperties getTitleFont() {
+		titleFont.setFontName(titleFontName);
+		titleFont.setFontSize(titleFontSize);
+		return titleFont;
+	}
+	
+	public FontProperties getLabelFont() {
+		labelFont.setFontName(labelFontName);
+		labelFont.setFontSize(labelFontSize);
+		return labelFont;
+	}
+
+	public boolean isLog() {
+		return this.log;
+	}
+
+	public void setLog(boolean log) {
+		this.log = log;
+	}
+	private static int returnIndex(String[] strings, int number){
+		for(int i=0; i<strings.length; i++){
+			if(Integer.parseInt(strings[i]) == number){
+				return i;
+			}
+		}
+		return 0;
+	}
+	
+	public Dimension1D getRange() {
+		Dimension1D range = new Dimension1D();
+		range.setMinMax(axisMinimum, axisMaximum);
+		return range;
+	}
+
+	public boolean getGrid() {
+		return axisGrid;
+	}
+	
+	public void setGrid(boolean axisGrid) {
+		this.axisGrid = axisGrid;
 	}
     
 }

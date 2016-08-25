@@ -5,13 +5,17 @@
  */
 package org.jlab.groot.graphics;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
@@ -35,7 +39,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JSeparator;
+import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
@@ -46,24 +50,30 @@ import org.jlab.groot.data.H2F;
 import org.jlab.groot.data.IDataSet;
 import org.jlab.groot.group.DataGroup;
 import org.jlab.groot.math.FunctionFactory;
+import org.jlab.groot.ui.OptionsPanel;
 import org.jlab.groot.ui.TransferableImage;
 
 /**
  *
  * @author gavalian
  */
+@SuppressWarnings("serial")
 public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseListener, ActionListener {
-    
+    IDataSet selectedDataset = null;
     private Timer        updateTimer = null;
     private Long numberOfPaints  = (long) 0;
     private Long paintingTime    = (long) 0;
+    private Long paintingTimeSum    = (long) 0;
+    private Long samples = (long)0;
     private JPopupMenu popup = null;
     private int popupPad = 0;
     private List<EmbeddedPad>    canvasPads  = new ArrayList<EmbeddedPad>();
     private int                  ec_COLUMNS  = 1;
     private int                  ec_ROWS     = 1;
-    private PadMargins           canvasPadding = new PadMargins();
+   // private PadMargins           canvasPadding = new PadMargins();
     private int                  activePad     = 0; 
+    private boolean isChild = false;
+    private boolean showFPS = false;
     
     public EmbeddedCanvas(){
         super();
@@ -127,7 +137,9 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
                 double xe  = (ic+1) * (rW/((double) ec_COLUMNS ));
                 double y   = ir * ( rH/((double) ec_ROWS) );
                 double ye  = (ir+1) * ( rH/((double) ec_ROWS));
-                //System.out.println("PAD " + pcounter + " " + x + " " + xe );
+               // System.out.println("PAD " + pcounter + " " + x + " " + xe );
+                //System.out.printf("Pad: "+pcounter+" %d %d %d %d\n",(int) x + startX, (int) y - minY,
+                //        (int) (xe-x), (int) (ye-y));
                 canvasPads.get(pcounter).setDimension((int) x + startX, (int) y - minY,
                         (int) (xe-x), (int) (ye-y));
 
@@ -176,10 +188,26 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
             }
             
             Long et = System.currentTimeMillis();
-            paintingTime += (et-st);
+            Long paintingTime = (et-st);
+            paintingTimeSum+=paintingTime;
+            samples++;
+            double average = (double)paintingTimeSum/(double)samples;
+            if(showFPS){
+            	g2d.setColor(Color.WHITE);
+            	g2d.fillRect(0, 0, 70, 32);
+            	g2d.setColor(Color.BLACK);
+            	g2d.drawRect(0, 0, 70, 32);
+            	g2d.setColor(Color.BLUE);
+            	g2d.drawString(String.format("%d FPS",(int)(1.0/(((double)paintingTime)/1000.0))), 5, 14);
+            	g2d.drawString(String.format("%4.2f Avg",(1.0/((average)/1000.0))), 5, 28);
+
+            	//System.out.println("Painting time: "+paintingTime+"ms");
+            }
+            paintingTime += paintingTime;
             numberOfPaints++;
         } catch(Exception e){
             System.out.println("[EmbeddedCanvas] ---> ooops");
+            System.out.println(e);
         }
     }
         public EmbeddedPad  getPad(int index){
@@ -187,7 +215,10 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
     }
         
     public void update(){
-        this.repaint();       
+		JFrame topFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
+		topFrame.getContentPane().setVisible(false);
+        this.repaint();   
+		topFrame.getContentPane().setVisible(true);
         //System.out.println(this.getBenchmarkString());
     }
     
@@ -207,6 +238,9 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
         for(EmbeddedPad pad : canvasPads){
             pad.setAxisFontSize(size);
         }
+    }
+    public void showFPS(boolean benchmark){
+    	this.showFPS = benchmark;
     }
     
     public void  initTimer(int interval){
@@ -257,19 +291,70 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
 
     @Override
     public void mouseMoved(MouseEvent e) {
-        int pad = this.getPadByXY(e.getX(),e.getY());
+        //int pad = this.getPadByXY(e.getX(),e.getY());
         //System.out.println("you're hovering over pad = " + pad);
     }
+    int fillcolortemp = 1;
+
     @Override
     public void mouseClicked(MouseEvent e) {
         //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-        if(e.getClickCount()==2){
+        if(e.getClickCount()==2&&!isChild){
             int pad = this.getPadByXY(e.getX(),e.getY());
-            System.out.println("you double clicked on " + pad);
-            JDialog  dialogWin = new JDialog();            
-            dialogWin.setContentPane(new EmbeddedCanvas());
-            dialogWin.setSize(400, 400);
-            dialogWin.setVisible(true);
+            double scale = 1.5;
+            //System.out.println("you double clicked on " + pad);
+            JFrame  popoutFrame = new JFrame();
+            EmbeddedCanvas can = new EmbeddedCanvas();
+            EmbeddedPad embeddedPad = this.getPad(pad).getCopy();
+            can.showFPS(this.showFPS);
+            int xSize = (int)(this.getPad(pad).getWidth());
+            int ySize = (int)(this.getPad(pad).getHeight());
+
+            can.setPreferredSize(new Dimension((int)(xSize*scale),(int)(ySize*scale)));
+            can.setChild(true);
+            ArrayList<EmbeddedPad> pads = new ArrayList<EmbeddedPad>();
+            pads.add(embeddedPad);
+            can.canvasPads = pads;
+            popoutFrame.setContentPane(can);
+           // dialogWin.setSize(400, 400);
+            popoutFrame.pack();
+            popoutFrame.setLocation(new Point(e.getX(),e.getY()));
+            popoutFrame.setVisible(true);
+        }
+        if(e.getClickCount()==1&&e.getButton()==1){
+        	//System.out.println("Left click!");
+        	if(selectedDataset!=null){
+				selectedDataset.getAttributes().setFillColor(fillcolortemp);
+				this.repaint();
+			}
+        	selectedDataset = null;
+        	for(EmbeddedPad pad : this.canvasPads){
+        		if(pad.getAxisFrame().getFrameDimensions().contains(e.getX(),e.getY())){
+        			//System.out.println("This pad contains the click");
+        		if(pad.getDatasetPlotters().size()>0){
+        			for(IDataSetPlotter plotter : pad.getDatasetPlotters())
+        				if(plotter instanceof HistogramPlotter){
+        					HistogramPlotter temp = (HistogramPlotter) plotter;
+        					if(temp.path.contains(e.getX(), e.getY())){
+        						System.out.println("You clicked on:"+temp.getName());
+        						if(selectedDataset != temp ){
+        							if(selectedDataset!=null){
+        								selectedDataset.getAttributes().setFillColor(fillcolortemp);
+        							}
+            						fillcolortemp = temp.getDataSet().getAttributes().getFillColor();
+            						selectedDataset = temp.getDataSet();
+            						if(fillcolortemp<10){
+            							temp.getDataSet().getAttributes().setFillColor(fillcolortemp+10);
+            						}else{
+            							temp.getDataSet().getAttributes().setFillColor(fillcolortemp-10);
+            						}
+            						this.repaint();
+        						}
+        					}
+	        		}
+        		}
+        		}
+        	}
         }
        
     }
@@ -290,17 +375,18 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
 
     @Override
     public void mouseEntered(MouseEvent e) {
-        //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    	
     }
+
 
     @Override
     public void mouseExited(MouseEvent e) {
-        //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
+    	
+    	} 
     
     private void createPopupMenu(){
         this.popup = new JPopupMenu();
-        JMenuItem itemCopy = new JMenuItem("Copy Canvas Image");
+        JMenuItem itemCopy = new JMenuItem("Copy Canvas");
         JMenuItem itemCopyPad = new JMenuItem("Copy Pad");
         JMenuItem itemPaste = new JMenuItem("Paste Pad");
         JMenuItem itemSave = new JMenuItem("Save");
@@ -318,32 +404,32 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
         itemPaste.addActionListener(this);
         this.popup.add(itemCopy);
         this.popup.add(itemCopyPad);
-        //this.popup.add(itemPaste);
+        this.popup.add(itemPaste);
         this.popup.add(itemSave);
         this.popup.add(itemSaveAs);
         //this.popup.add(new JSeparator());
         //this.popup.add(itemFitPanel);
         //this.popup.add(new JSeparator());
-        //this.popup.add(itemOptions);
+        this.popup.add(itemOptions);
         //this.popup.add(itemOpenWindow);
-        addMouseListener(this);
+        //addMouseListener(this);
     }
     @Override
     public void actionPerformed(ActionEvent e) {
         System.out.println("action performed " + e.getActionCommand());
-        /*
+        
         if(e.getActionCommand().compareTo("Options")==0){
             this.openOptionsPanel(popupPad);
-        }
+        }/*
         if(e.getActionCommand().compareTo("Fit Panel")==0){
             this.openFitPanel(popupPad);
         }*/
-        if(e.getActionCommand().compareTo("Copy")==0){
+        if(e.getActionCommand().compareTo("Copy Canvas")==0){
             this.copyToClipboard();
-        }/*
+        }
         if(e.getActionCommand().compareTo("Paste Pad")==0){
             this.paste(popupPad);
-        }*/
+        }
         if(e.getActionCommand().compareTo("Copy Pad")==0){
             this.copyToClipboard(popupPad);
         }
@@ -382,20 +468,72 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
         }*/
         
     }
-    private BufferedImage getScreenShot(){
+    private void paste(int popupPad2) {
+    	 DataFlavor dmselFlavor = new DataFlavor(EmbeddedPad.class, "EmbeddedPad");
+    	 Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+         Transferable clipboardContent = clipboard.getContents(null);
+
+         DataFlavor[] flavors = clipboardContent.getTransferDataFlavors();
+         System.out.println("flavors.length = " + flavors.length);
+         for (int i = 0; i < flavors.length; i++){
+         	if(flavors[i].equals(dmselFlavor)){
+         		System.out.println("We have a match!");
+         		try{
+         		EmbeddedPad pad = (EmbeddedPad) clipboardContent.getTransferData(dmselFlavor);
+         		for(int j=0; j<pad.getDatasetPlotters().size(); j++){
+         			this.getPad(popupPad2).getDatasetPlotters().add(pad.getDatasetPlotters().get(j));
+         		}
+         		this.update();
+         		}catch(Exception e){
+         			e.printStackTrace();
+         		}
+         	}
+         }
+            //System.out.println("flavor[" + i + "] = " + flavors[i]);		
+	}
+
+	private void openOptionsPanel(int popupPad2) {
+    	JFrame frame = new JFrame("Options Panel");
+    	frame.setLayout(new BorderLayout());
+    	OptionsPanel mainPanel = new OptionsPanel(this,popupPad2);
+    	frame.add(mainPanel);
+    	frame.pack();
+    	frame.setLocationRelativeTo(this);
+    	frame.setVisible(true);
+    	
+	}
+
+	private BufferedImage getScreenShot(){
         BufferedImage bi = new BufferedImage(
             this.getWidth(), this.getHeight(), BufferedImage.TYPE_4BYTE_ABGR_PRE);
         this.paint(bi.getGraphics());
         return bi;
     }
     
-    private BufferedImage getScreenShot(int index){
+    private BufferedImage getScreenShot(int pad){
         //BufferedImage bi = new BufferedImage(
         //    (int)this.getPad(index).getWidth(), (int)this.getPad(index).getHeight(), BufferedImage.TYPE_4BYTE_ABGR_PRE);
-    	BufferedImage bi = new BufferedImage(
-                this.getWidth(), this.getHeight(), BufferedImage.TYPE_4BYTE_ABGR_PRE);
-    	this.getPad(index).paint(bi.getGraphics());
-        return bi;
+    	//BufferedImage bi = new BufferedImage(
+         //       this.getPad(pad).getWidth(), this.getPad(pad).getHeight(), BufferedImage.TYPE_4BYTE_ABGR_PRE);
+        double scale = 1.0;
+        //System.out.println("you double clicked on " + pad);
+        //JDialog  dialogWin = new JDialog();
+        EmbeddedCanvas can = new EmbeddedCanvas();
+        EmbeddedPad embeddedPad = this.getPad(pad).getCopy();
+        int xSize = (int)(this.getPad(pad).getWidth());
+        int ySize = (int)(this.getPad(pad).getHeight());
+
+        can.setPreferredSize(new Dimension((int)(xSize*scale),(int)(ySize*scale)));
+        can.setMinimumSize(new Dimension((int)(xSize*scale),(int)(ySize*scale)));
+        can.setSize(new Dimension((int)(xSize*scale),(int)(ySize*scale)));
+        can.setChild(true);
+        ArrayList<EmbeddedPad> pads = new ArrayList<EmbeddedPad>();
+        pads.add(embeddedPad);
+        can.canvasPads = pads;
+       // dialogWin.setContentPane(can);
+       // dialogWin.setSize(400, 400);
+        //dialogWin.pack();
+        return can.getScreenShot();
     }
     public void copyToClipboard(){
     	TransferableImage trans = new TransferableImage( getScreenShot() );
@@ -405,7 +543,7 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
     
     private void copyToClipboard(int popupPad) {
     	TransferableImage trans = new TransferableImage(getScreenShot(popupPad));
-    	//trans.setDataSetCollection(this.getPad(popupPad).getPad().getCollection());
+    	trans.setPad(this.getPad(popupPad));
         Clipboard c = Toolkit.getDefaultToolkit().getSystemClipboard();
         c.setContents(trans, null );
     }
@@ -431,8 +569,8 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
         //canvas.getPad(1).getAxisFrame().getAxisY().setAxisFontSize(18);
         //canvas.getPad(0).getAxisFrame().setDrawAxisZ(true);
         
-        H1F h1  = FunctionFactory.createDebugH1F(6);
-        H1F h2  = FunctionFactory.randomGausian(100, 0.4, 5.6, 200000, 2.3, 0.8);
+      //  H1F h1  = FunctionFactory.createDebugH1F(6);
+       // H1F h2  = FunctionFactory.randomGausian(100, 0.4, 5.6, 200000, 2.3, 0.8);
         H1F h2b = FunctionFactory.randomGausian(100, 0.4, 5.6, 80000, 4.0, 0.8);
         H2F h2d = FunctionFactory.randomGausian2D(40, 0.4, 5.6, 800000, 2.3, 0.8);
         
@@ -451,6 +589,74 @@ public class EmbeddedCanvas extends JPanel implements MouseMotionListener,MouseL
         frame.setVisible(true);
         
     }
+
+	public boolean isChild() {
+		return isChild;
+	}
+
+	public void setChild(boolean isChild) {
+		this.isChild = isChild;
+	}
+
+	public void setFont(String fontName) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.setFontNameAll(fontName);
+		}
+	}
+
+	public void setTitleSize(int fontSize) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.setTitleFontSize(fontSize);
+		}		
+	}
+
+	public void setAxisLabelSize(int fontSize) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.setAxisLabelFontSize(fontSize);
+		}	
+	}
+
+	public void setAxisTitleSize(int fontSize) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.setAxisTitleFontSize(fontSize);
+		}			
+	}
+
+	public void setStatBoxFontSize(int fontSize) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.setStatBoxFontSize(fontSize);
+		}			
+	}
+
+	public void setPadTitles(String title) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.setTitle(title);
+		}			
+	}
+
+	public void setPadTitlesX(String title) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.getAxisY().setTitle(title);
+		}			
+	}
+	
+	public void setPadTitlesY(String title) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.getAxisY().setTitle(title);
+		}			
+	}
+
+	public void setGridX(boolean isGrid) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.getAxisX().setGrid(isGrid);
+		}			
+	}
+
+	public void setGridY(boolean isGrid) {
+		for(EmbeddedPad pad : canvasPads){
+			pad.getAxisY().setGrid(isGrid);
+		}			
+	}
 
    
 }
